@@ -146,3 +146,9 @@ kernel/configs/android-*.cfg
 
 # OP SLA feature
 #opslalib/slalib
+
+*.rej
+*.diff
+*.patch
+*.list
+out/*
