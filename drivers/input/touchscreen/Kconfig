@@ -1336,4 +1336,7 @@ config TOUCHSCREEN_SYNAPTICS_DSX
 	  module will be called synaptics_dsx.
 
 source "drivers/input/touchscreen/synaptics_dsx/Kconfig"
+
+config WAKE_GESTURES
+	bool "wake gestures"
 endif
