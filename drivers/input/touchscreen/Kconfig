@@ -1355,4 +1355,7 @@ source "drivers/input/touchscreen/focaltech_touch/Kconfig"
 
 source "drivers/input/touchscreen/nt36xxx/Kconfig"
 
+config WAKE_GESTURES
+	bool "wake gestures"
+
 endif
