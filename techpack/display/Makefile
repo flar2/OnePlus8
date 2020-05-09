@@ -2,11 +2,19 @@
 
 # auto-detect subdirs
 ifeq ($(CONFIG_ARCH_KONA), y)
+ifeq ($(CONFIG_ARCH_ONEPLUS8PRO), y)
+include $(srctree)/techpack/display/config/op8prodisp.conf
+else
 include $(srctree)/techpack/display/config/konadisp.conf
+endif
 endif
 
 ifeq ($(CONFIG_ARCH_KONA), y)
+ifeq ($(CONFIG_ARCH_ONEPLUS8PRO), y)
+LINUXINCLUDE    += -include $(srctree)/techpack/display/config/op8prodispconf.h
+else
 LINUXINCLUDE    += -include $(srctree)/techpack/display/config/konadispconf.h
+endif
 endif
 
 ifeq ($(CONFIG_ARCH_LITO), y)
