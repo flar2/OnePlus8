@@ -5030,6 +5030,7 @@ static int tp_suspend(struct device *dev)
 	        if (wg_switch)
 		    goto EXIT;
 	        else if (ts->gesture_enable == 1) {
+		    ts->ts_ops->mode_switch(ts->chip_data, MODE_TOUCH_HOLD, false);//suspend, close touchhold function.
 	 	    ts->ts_ops->mode_switch(ts->chip_data, MODE_GESTURE, true);
 		    goto EXIT;
 		}
