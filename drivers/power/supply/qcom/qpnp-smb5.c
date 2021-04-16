@@ -603,8 +603,6 @@ static int smb5_parse_dt_misc(struct smb5 *chip, struct device_node *node)
 		chg->FFC_NOR_FCC, chg->FFC_WARM_FCC, chg->FFC_NORMAL_CUTOFF,
 		chg->FFC_WARM_CUTOFF, chg->FFC_VBAT_FULL);
 
-/* @bsp, 2019/07/05 Battery & Charging porting */
-	/* read ibatmax setting for different temp regions */
 	OF_PROP_READ(node, "ibatmax-little-cold-ma",
 			chg->ibatmax[BATT_TEMP_LITTLE_COLD], retval, 1);
 	OF_PROP_READ(node, "ibatmax-cool-ma",
@@ -799,14 +797,13 @@ static int smb5_parse_dt_misc(struct smb5 *chip, struct device_node *node)
 		chg->OTG_LOW_BAT,
 		chg->OTG_LOW_BAT_ICL,
 		chg->OTG_NORMAL_BAT_ICL);
-/* @bsp, 2018/07/26 enable stm6620 sheepmode */
+
 	chg->shipmode_en = of_get_named_gpio_flags(node,
 						"op,stm-ctrl-gpio", 0, &flags);
 	chg->vbus_ctrl = of_get_named_gpio_flags(node,
 					"op,vbus-ctrl-gpio", 0, &flags);
 	chg->plug_irq = of_get_named_gpio_flags(node,
 					"op,usb-check", 0, &flags);
-/* @bsp, 2019/06/28 vph sel set disable */
 	chg->vph_sel_disable = of_property_read_bool(node,
 					"vph-sel-disable");
 	/* read other settings */
@@ -1177,7 +1174,8 @@ static int smb5_parse_dt_misc(struct smb5 *chip, struct device_node *node)
 	if (rc < 0)
 		chg->qcpd_9v_vbat_thr = 4000;
 
-	chg->lpd_disabled = of_property_read_bool(node, "qcom,lpd-disable");
+	chg->lpd_disabled = chg->lpd_disabled ||
+			of_property_read_bool(node, "qcom,lpd-disable");
 
 	rc = of_property_read_u32(node, "qcom,wd-bark-time-secs",
 					&chip->dt.wd_bark_time);
@@ -1404,6 +1402,9 @@ static int smb5_parse_dt_misc(struct smb5 *chip, struct device_node *node)
 					&chg->chg_param.qc4_max_icl_ua);
 	if (chg->chg_param.qc4_max_icl_ua <= 0)
 		chg->chg_param.qc4_max_icl_ua = MICRO_4PA;
+
+	chg->en_temp_ctrl_center = of_property_read_bool(node,
+							"op,enable-temp-ctrl-center");
 
 	return 0;
 }
@@ -1867,6 +1868,9 @@ static int smb5_usb_get_prop(struct power_supply *psy,
 			if (!rc)
 				val->intval = (buff[1] << 8 | buff[0]) * 1038;
 		}
+		break;
+	case POWER_SUPPLY_PROP_DISCONNECT_PD:
+		val->intval = chg->disconnect_pd;
 		break;
 	case POWER_SUPPLY_PROP_ADAPTER_SID:
 		val->intval = chg->adapter_sid;
@@ -2635,6 +2639,7 @@ static enum power_supply_property smb5_batt_props[] = {
 	POWER_SUPPLY_PROP_OP_DISABLE_CHARGE,
 	POWER_SUPPLY_PROP_TIME_TO_FULL_AVG,
 	POWER_SUPPLY_PROP_TIME_TO_FULL_NOW,
+	POWER_SUPPLY_PROP_COOL_DOWN,
 	POWER_SUPPLY_PROP_DUMP_REG,
 };
 
@@ -2850,6 +2855,9 @@ static int smb5_batt_get_prop(struct power_supply *psy,
 		rc = smblib_get_prop_from_bms(chg,
 				POWER_SUPPLY_PROP_TIME_TO_FULL_NOW, val);
 		break;
+	case POWER_SUPPLY_PROP_COOL_DOWN:
+		val->intval = chg->cool_down;
+		break;
 	default:
 		pr_err("batt power supply prop %d not supported\n", psp);
 		return -EINVAL;
@@ -2889,10 +2897,6 @@ static int smb5_batt_set_prop(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_FASTCHG_IS_OK:
 		rc = 0;
-		break;
-	case POWER_SUPPLY_PROP_DUMP_REG:
-		if (val->intval == 1)
-			schedule_work(&chg->dump_reg_work);
 		break;
 #ifdef OP_SWARP_SUPPORTED
 	case POWER_SUPPLY_PROP_FASTCHG_TYPE:
@@ -3007,6 +3011,10 @@ static int smb5_batt_set_prop(struct power_supply *psy,
 		__debug_mask = PR_OP_DEBUG;
 		pr_info("user set is_aging_test:%d\n", chg->is_aging_test);
 		break;
+	case POWER_SUPPLY_PROP_DUMP_REG:
+		if (val->intval == 1)
+			schedule_work(&chg->dump_reg_work);
+		break;
 	case POWER_SUPPLY_PROP_CAPACITY:
 		rc = smblib_set_prop_batt_capacity(chg, val);
 		break;
@@ -3089,6 +3097,9 @@ static int smb5_batt_set_prop(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_FCC_STEPPER_ENABLE:
 		chg->fcc_stepper_enable = val->intval;
 		break;
+	case POWER_SUPPLY_PROP_COOL_DOWN:
+		op_smart_charge_by_cool_down(chg, val->intval);
+		break;
 	default:
 		rc = -EINVAL;
 	}
@@ -3126,6 +3137,7 @@ static int smb5_batt_prop_is_writeable(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_DIE_HEALTH:
 	case POWER_SUPPLY_PROP_OP_DISABLE_CHARGE:
 	case POWER_SUPPLY_PROP_APSD_NOT_DONE:
+	case POWER_SUPPLY_PROP_COOL_DOWN:
 	case POWER_SUPPLY_PROP_DUMP_REG:
 		return 1;
 	default:
@@ -3296,20 +3308,12 @@ static int smb5_configure_typec(struct smb_charger *chg)
 
 	smblib_apsd_enable(chg, true);
 
-	rc = smblib_read(chg, TYPE_C_SNK_STATUS_REG, &val);
+	/*revert qcom 94b7d70cfe for more cables*/
+	rc = smblib_masked_write(chg, TYPE_C_CFG_REG,
+					BC1P2_START_ON_CC_BIT, 0);
 	if (rc < 0) {
-		dev_err(chg->dev, "failed to read TYPE_C_SNK_STATUS_REG rc=%d\n",
-				rc);
-
+		dev_err(chg->dev, "failed to write TYPE_C_CFG_REG rc=%d\n", rc);
 		return rc;
-	}
-	if (!(val & SNK_DAM_MASK)) {
-		rc = smblib_masked_write(chg, TYPE_C_CFG_REG,
-						BC1P2_START_ON_CC_BIT, 0);
-		if (rc < 0) {
-			dev_err(chg->dev, "failed to write TYPE_C_CFG_REG rc=%d\n", rc);
-			return rc;
-		}
 	}
 
 	rc = smblib_write(chg, DEBUG_ACCESS_SNK_CFG_REG, 0x7);
@@ -4674,7 +4678,6 @@ static void smb5_create_debugfs(struct smb5 *chip)
 
 #endif
 
-/* @bsp, 2020/06/05 Battery & Charging add for skin_thermal online config */
 static ssize_t proc_skin_threld_read(struct file *file, char __user *buf,
 					    size_t count, loff_t *ppos)
 {
@@ -4761,7 +4764,6 @@ static const struct file_operations proc_skin_threld_ops = {
 	.owner = THIS_MODULE,
 };
 
-/* @bsp, 2020/06/05 Battery & Charging add for skin_thermal online config */
 static ssize_t proc_skin_lcdoff_threld_read(struct file *file, char __user *buf,
 					    size_t count, loff_t *ppos)
 {
@@ -5032,7 +5034,7 @@ static int create_skin_thermal_proc(void)
 		pr_err("Failed to register norchg_lcdoff_thd proc interface\n");
 	return 0;
 }
-/* @bsp, 2019/07/06 Battery & Charging porting */
+
 #ifdef CONFIG_PROC_FS
 static ssize_t write_ship_mode(struct file *file, const char __user *buf,
 				   size_t count, loff_t *ppos)
@@ -5051,7 +5053,6 @@ static const struct file_operations proc_ship_mode_operations = {
 };
 #endif
 
-/* @bsp, 2018/07/26 Enable external stm6620 ship mode*/
 static int op_ship_mode_gpio_request(struct smb_charger *chip)
 {
 	int rc;
@@ -5094,7 +5095,6 @@ static int op_ship_mode_gpio_request(struct smb_charger *chip)
 
 }
 
-/* @bsp 2018/07/30 add usb connector temp detect and wr*/
 void requset_vbus_ctrl_gpio(struct smb_charger *chg)
 {
 	int ret;
@@ -5242,11 +5242,12 @@ static int smb5_init_typec_class(struct smb5 *chip)
 	struct smb_charger *chg = &chip->chg;
 	int rc = 0;
 
+	mutex_init(&chg->typec_lock);
+
 	/* Register typec class for only non-PD TypeC and uUSB designs */
 	if (!chg->pd_not_supported)
 		return rc;
 
-	mutex_init(&chg->typec_lock);
 	chg->typec_caps.type = TYPEC_PORT_DRP;
 	chg->typec_caps.data = TYPEC_PORT_DRD;
 	chg->typec_partner_desc.usb_pd = false;
