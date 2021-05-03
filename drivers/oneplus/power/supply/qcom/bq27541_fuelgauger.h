@@ -1,6 +1,5 @@
 #ifndef __OP_BQ27541_H__
 #define __OP_BQ27541_H__
-
 #define CONFIG_GAUGE_BQ27411		1
 #define DEVICE_TYPE_BQ27541		0x0541
 #define DEVICE_TYPE_BQ27411		0x0421

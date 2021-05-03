@@ -1615,6 +1615,8 @@ static long wlchg_dev_ioctl(struct file *filp, unsigned int cmd,
 		chg_status->adapter_type = arg;
 		if (chip->wireless_psy != NULL)
 			power_supply_changed(chip->wireless_psy);
+		if (chg_status->adapter_type == ADAPTER_TYPE_FASTCHAGE_PD_65W)
+			chg_status->adapter_type = ADAPTER_TYPE_FASTCHAGE_WARP;
 		if (chip->chg_param.fastchg_fod_enable &&
 		    (chg_status->adapter_type == ADAPTER_TYPE_FASTCHAGE_DASH ||
 		     chg_status->adapter_type == ADAPTER_TYPE_FASTCHAGE_WARP))

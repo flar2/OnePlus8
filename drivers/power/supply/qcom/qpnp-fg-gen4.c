@@ -3864,12 +3864,12 @@ static struct fg_irq_info fg_irqs[FG_GEN4_IRQ_MAX] = {
 	[MSOC_DELTA_IRQ] = {
 		.name		= "msoc-delta",
 		.handler	= fg_delta_msoc_irq_handler,
-		.wakeable	= false,
+		.wakeable	= true,
 	},
 	[BSOC_DELTA_IRQ] = {
 		.name		= "bsoc-delta",
 		.handler	= fg_delta_bsoc_irq_handler,
-		.wakeable	= false,
+		.wakeable	= true,
 	},
 	[SOC_READY_IRQ] = {
 		.name		= "soc-ready",
@@ -3884,7 +3884,7 @@ static struct fg_irq_info fg_irqs[FG_GEN4_IRQ_MAX] = {
 	[ESR_DELTA_IRQ] = {
 		.name		= "esr-delta",
 		.handler	= fg_delta_esr_irq_handler,
-		.wakeable	= false,
+		.wakeable	= true,
 	},
 	[VBATT_LOW_IRQ] = {
 		.name		= "vbatt-low",
@@ -5081,11 +5081,9 @@ static int fg_delta_bsoc_irq_en_cb(struct votable *votable, void *data,
 
 	if (enable) {
 		enable_irq(fg->irqs[BSOC_DELTA_IRQ].irq);
-		if (fg->irqs[BSOC_DELTA_IRQ].wakeable)
-			enable_irq_wake(fg->irqs[BSOC_DELTA_IRQ].irq);
+		enable_irq_wake(fg->irqs[BSOC_DELTA_IRQ].irq);
 	} else {
-		if (fg->irqs[BSOC_DELTA_IRQ].wakeable)
-			disable_irq_wake(fg->irqs[BSOC_DELTA_IRQ].irq);
+		disable_irq_wake(fg->irqs[BSOC_DELTA_IRQ].irq);
 		disable_irq_nosync(fg->irqs[BSOC_DELTA_IRQ].irq);
 	}
 
@@ -5102,11 +5100,9 @@ static int fg_gen4_delta_esr_irq_en_cb(struct votable *votable, void *data,
 
 	if (enable) {
 		enable_irq(fg->irqs[ESR_DELTA_IRQ].irq);
-		if (fg->irqs[ESR_DELTA_IRQ].wakeable)
-			enable_irq_wake(fg->irqs[ESR_DELTA_IRQ].irq);
+		enable_irq_wake(fg->irqs[ESR_DELTA_IRQ].irq);
 	} else {
-		if (fg->irqs[ESR_DELTA_IRQ].wakeable)
-			disable_irq_wake(fg->irqs[ESR_DELTA_IRQ].irq);
+		disable_irq_wake(fg->irqs[ESR_DELTA_IRQ].irq);
 		disable_irq_nosync(fg->irqs[ESR_DELTA_IRQ].irq);
 	}
 

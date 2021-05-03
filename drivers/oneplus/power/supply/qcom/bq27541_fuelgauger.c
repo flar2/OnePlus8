@@ -1271,7 +1271,7 @@ static void gauge_set_cmd_addr(int device_type)
 		bq27541_di->cmd_addr.reg_soc = BQ27541_REG_SOC;
 		bq27541_di->cmd_addr.reg_helth = BQ27541_REG_NIC;
 		bq27541_di->cmd_addr.reg_fcc = BQ27541_REG_FCC;
-	} else { /* device_bq27411 */
+	} else {
 		bq27541_di->cmd_addr.reg_temp = BQ27411_REG_TEMP;
 		bq27541_di->cmd_addr.reg_volt = BQ27411_REG_VOLT;
 		bq27541_di->cmd_addr.reg_rm = BQ27411_REG_RM;
@@ -1369,9 +1369,7 @@ static void bq27541_hw_config(struct work_struct *work)
 	}
 	external_battery_gauge_register(&bq27541_batt_gauge);
 	bq27541_information_register(&bq27541_batt_gauge);
-#ifdef CONFIG_ONEPLUS_WIRELESSCHG
 	exfg_information_register(&bq27541_batt_gauge);
-#endif
 	bq27541_cntl_cmd(di, BQ27541_SUBCMD_CTNL_STATUS);
 	udelay(66);
 	bq27541_read(BQ27541_REG_CNTL, &flags, 0, di);
